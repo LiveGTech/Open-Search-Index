@@ -8,6 +8,8 @@
 */
 
 const fs = require("fs");
+const path = require("path");
+const mkdirp = require("mkdirp");
 const jsdom = require("jsdom");
 
 const fetch = function(...args) {
@@ -18,27 +20,88 @@ const fetch = function(...args) {
 
 const MAX_CRAWL_DEPTH = 10;
 const MIN_WORD_COUNT_AS_KEYWORD = 3;
-const CRAWL_TIMEOUT_DURATION = 3_000;
+const CRAWL_TIMEOUT_DURATION = 5_000;
 const CRAWL_PAUSE_DURATION = 3_000;
 
 const RE_MATCH_ALL_WORDS = /[\w']+/g;
+
+const INDEX_FIELDS = ["url", "title", "description", "firstIndexed", "lastUpdated", "referenceScore", "keywordScore"];
 
 var pagesToCrawl = fs.readFileSync("data/tocrawl.txt", "utf-8").split("\n").filter((line) => line != "");
 var pagesCrawled = [];
 var crawlStats = {added: 0, crawled: 0, skipped: 0};
 var indexes = {};
 
+function normaliseWord(word) {
+    return word.toLocaleLowerCase().replace(/[']/g, "");
+}
+
 function findCommonWords(text) {
     var words = {};
 
     [...text.matchAll(RE_MATCH_ALL_WORDS)].forEach(function(match) {
-        var word = match[0].toLocaleLowerCase();
+        var word = normaliseWord(match[0]);
 
         words[word] ||= 0;
         words[word]++;
     });
     
     return words;
+}
+
+function tsvToObjects(data) {
+    var entries = data.split("\n").filter((entry) => entry != "");
+    var fields = entries.shift().split("\t");
+
+    return entries.map(function(entryText) {
+        var entry = {};
+
+        entryText = entryText.split("\t");
+
+        fields.forEach(function(field, i) {
+            entry[field] = entryText[i];
+        });
+
+        return entry;
+    });
+}
+
+function objectsToTsv(data, fields) {
+    var entryLines = [];
+
+    entryLines.push(fields.join("\t"));
+
+    data.forEach(function(entry) {
+        var entryLine = [];
+
+        fields.forEach(function(field) {
+            entryLine.push(entry[field]);
+        });
+
+        entryLines.push(entryLine.join("\t"));
+    });
+
+    return entryLines.join("\n");
+}
+
+function loadIndex(keyword) {
+    var filePath = path.join("data", "indexes", `${keyword}.tsv`);
+
+    if (!fs.existsSync(filePath)) {
+        indexes[keyword] = [];
+
+        return;
+    }
+
+    indexes[keyword] = tsvToObjects(fs.readFileSync(filePath, "utf-8"));
+}
+
+function saveIndex(keyword) {
+    var filePath = path.join("data", "indexes", `${keyword}.tsv`);
+
+    mkdirp.sync(path.join("data", "indexes"));
+
+    fs.writeFileSync(filePath, objectsToTsv(indexes[keyword], INDEX_FIELDS));
 }
 
 function crawlPage(url) {
@@ -87,7 +150,7 @@ function crawlPage(url) {
                 return Promise.resolve();
             }
 
-            var titleWords = [...pageTitle.matchAll(RE_MATCH_ALL_WORDS)].map((match) => match[0].toLocaleLowerCase());
+            var titleWords = [...pageTitle.matchAll(RE_MATCH_ALL_WORDS)].map((match) => normaliseWord(match[0]));
             var commonWords = findCommonWords(pageText);
             var wordSet = new Set([...titleWords, ...Object.keys(commonWords)]);
 
@@ -110,7 +173,9 @@ function crawlPage(url) {
                     return;
                 }
 
-                indexes[word] ||= [];
+                if (!indexes[word]) {
+                    loadIndex(word);
+                }
 
                 var currentEntry;
 
@@ -122,6 +187,8 @@ function crawlPage(url) {
                 } else {
                     indexes[word].push(entry);
                 }
+
+                saveIndex(word);
             });
 
             console.log(`Crawl complete: ${url}`);

@@ -10,6 +10,7 @@
     },
     "dependencies": {
         "jsdom": "^20.0.3",
+        "mkdirp": "^1.0.4",
         "node-fetch": "^3.3.0"
     }
 }
