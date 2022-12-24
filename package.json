@@ -1,0 +1,14 @@
+{
+    "name": "liveg-osi",
+    "version": "0.2.0",
+    "description": "A search engine web crawler that powers LiveG Search.",
+    "main": "src/main.js",
+    "author": "LiveG Technologies",
+    "repository": "https://github.com/LiveGTech/Open-Search-Index",
+    "scripts": {
+        "osi": "node src/main.js"
+    },
+    "dependencies": {
+        "jsdom": "^20.0.3"
+    }
+}
