@@ -161,4 +161,8 @@ function getNextToCrawl() {
     });
 }
 
-getNextToCrawl();
+getNextToCrawl().then(function() {
+    console.log("Got to end of crawl list");
+
+    console.log(indexes);
+});
