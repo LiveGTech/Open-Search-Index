@@ -9,6 +9,7 @@
         "osi": "node src/main.js"
     },
     "dependencies": {
-        "jsdom": "^20.0.3"
+        "jsdom": "^20.0.3",
+        "node-fetch": "^3.3.0"
     }
 }
