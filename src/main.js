@@ -198,7 +198,7 @@ function crawlPage(url) {
             return Promise.resolve();
         });
     }).catch(function(error) {
-        console.warn(`Error: ${url}`, error);
+        console.warn(`Crawl error: ${url}`, error);
 
         crawlStats.skipped++;
 
