@@ -210,6 +210,8 @@ function getNextToCrawl() {
     console.log("Crawl stats:", crawlStats);
 
     if (pagesToCrawl.length == 0) {
+        console.log("Got to end of crawl list");
+
         return Promise.resolve();
     }
 
@@ -229,7 +231,5 @@ function getNextToCrawl() {
 }
 
 getNextToCrawl().then(function() {
-    console.log("Got to end of crawl list");
-
-    console.log(indexes);
+    console.log("Final indexes:", indexes);
 });
