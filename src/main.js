@@ -115,7 +115,7 @@ function crawlPage(url) {
 
     console.log(`Crawling: ${url}`);
 
-    pagesCrawled.push(url);
+    pagesCrawled.push(url); // TODO: Maybe save this to a file
 
     var controller = new AbortController();
     var signal = controller.signal;
@@ -189,6 +189,24 @@ function crawlPage(url) {
                 }
 
                 saveIndex(word);
+            });
+
+            [...dom.querySelectorAll("a[href]")].forEach(function(element) {
+                var reference = element.getAttribute("href");
+                var newUrl = new URL(reference, url).href.split("#")[0];
+
+                if (newUrl.startsWith("http://") || newUrl.startsWith("https://")) {
+                    return;
+                }
+
+                if (pagesToCrawl.includes(newUrl) || pagesCrawled.includes(newUrl)) {
+                    // TODO: Figure out a way of allowing reference score going up only from third-party sites (without circular dependencies)
+                    return; // TODO: Add freshness (page age) theshold for already-crawled pages
+                }
+
+                console.log(`Discovered page: ${newUrl}`);
+
+                pagesToCrawl.push(newUrl); // TODO: Maybe save this to a file
             });
 
             console.log(`Crawl complete: ${url}`);
