@@ -194,14 +194,24 @@ function crawlPage(url) {
             [...dom.querySelectorAll("a[href]")].forEach(function(element) {
                 var reference = element.getAttribute("href");
                 var newUrl = new URL(reference, url).href.split("#")[0];
+                var shouldCrawl = true;
 
                 if (newUrl.startsWith("http://") || newUrl.startsWith("https://")) {
                     return;
                 }
 
                 if (pagesToCrawl.includes(newUrl) || pagesCrawled.includes(newUrl)) {
-                    // TODO: Figure out a way of allowing reference score going up only from third-party sites (without circular dependencies)
-                    return; // TODO: Add freshness (page age) theshold for already-crawled pages
+                    // TODO: Add freshness (page age) theshold for already-crawled pages
+                    shouldCrawl = false;
+
+                    if (new URL(url).host != new URL(newUrl).host) {
+                        // FIXME: Fix any potential cicular crawling issues
+                        shouldCrawl = true;
+                    }
+                }
+
+                if (!shouldCrawl) {
+                    return;
                 }
 
                 console.log(`Discovered page: ${newUrl}`);
