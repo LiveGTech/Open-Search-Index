@@ -12,6 +12,8 @@ const path = require("path");
 const mkdirp = require("mkdirp");
 const jsdom = require("jsdom");
 
+const validLangs = require("./validlangs");
+
 const fetch = function(...args) {
     return import("node-fetch").then(function({default: fetch}) {
         return fetch(...args);
@@ -27,7 +29,7 @@ const PAGE_RECRAWL_WAIT_DURATION = 7 * 24 * 60 * 60 * 1_000; // 1 week
 
 const RE_MATCH_ALL_WORDS = /[\w']+/g;
 
-const INDEX_FIELDS = ["url", "title", "description", "firstIndexed", "lastUpdated", "referenceScore", "keywordScore"];
+const INDEX_FIELDS = ["url", "title", "description", "pageLanguage", "firstIndexed", "lastUpdated", "referenceScore", "keywordScore"];
 const CRAWLED_LIST_FIELDS = ["url", "firstIndexed", "lastUpdated"];
 
 var pagesToCrawl = fs.readFileSync("data/tocrawl.txt", "utf-8").split("\n").filter((line) => line != "");
@@ -174,6 +176,13 @@ function crawlPage(url) {
             var pageTitle = dom.querySelector("title")?.textContent.trim();
             var pageDescription = (dom.querySelector("meta[name='description']")?.getAttribute("content") || "").trim();
             var pageText = dom.querySelector("body")?.textContent;
+            var pageLanguage = dom.querySelector("html").getAttribute("lang")?.trim().split(/[-_]/)[0].toLocaleLowerCase() || "";
+
+            pageLanguage = validLangs.REPLACE_LANGS[pageLanguage] || pageLanguage;
+
+            if (!validLangs.VALID_LANGS.includes(pageLanguage)) {
+                pageLanguage = "";
+            }
 
             if (!pageTitle || !pageText) {
                 console.log(`No text data skip: ${url}`);
@@ -192,13 +201,12 @@ function crawlPage(url) {
                     url,
                     title: pageTitle.replace(/[\n\t]/g, ""),
                     description: pageDescription.replace(/[\n\t]/g, ""),
+                    language: pageLanguage,
                     firstIndexed: Date.now(),
                     lastUpdated: Date.now(),
                     referenceScore: 1 / 100,
                     keywordScore: Math.min(((commonWords[word] || 0) + (titleWords.includes(word) ? 5 : 0)) / 25, 1)
                 };
-
-                // TODO: Add language attribute
 
                 if (word.match(/\d{1,3}/)) {
                     return;
