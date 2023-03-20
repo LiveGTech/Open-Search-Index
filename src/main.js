@@ -20,7 +20,7 @@ const fetch = function(...args) {
     });
 }
 
-const MAX_CRAWL_ADDITIONS = 5;
+const MAX_CRAWL_ADDITIONS_PER_HOST = 5;
 const MAX_SELECT_TOP_TO_CRAWL = 100;
 const MIN_WORD_COUNT_AS_KEYWORD = 3;
 const CRAWL_TIMEOUT_DURATION = 5 * 1_000; // 5 seconds
@@ -29,7 +29,7 @@ const PAGE_RECRAWL_WAIT_DURATION = 7 * 24 * 60 * 60 * 1_000; // 1 week
 
 const RE_MATCH_ALL_WORDS = /[\w']+/g;
 
-const INDEX_FIELDS = ["url", "title", "description", "pageLanguage", "firstIndexed", "lastUpdated", "referenceScore", "keywordScore"];
+const INDEX_FIELDS = ["url", "title", "description", "language", "firstIndexed", "lastUpdated", "referenceScore", "keywordScore"];
 const CRAWLED_LIST_FIELDS = ["url", "firstIndexed", "lastUpdated"];
 
 var pagesToCrawl = fs.readFileSync("data/tocrawl.txt", "utf-8").split("\n").filter((line) => line != "");
@@ -234,13 +234,17 @@ function crawlPage(url) {
                 saveIndex(word);
             });
 
-            [...dom.querySelectorAll("a[href]")].forEach(function(element, i) {
-                if (i > MAX_CRAWL_ADDITIONS) {
-                    return;
-                }
+            var additionsPerHost = {};
 
+            [...dom.querySelectorAll("a[href]")].forEach(function(element, i) {
                 var reference = element.getAttribute("href");
                 var newUrl = new URL(reference, url).href.split("#")[0];
+                var host = new URL(reference, url).host;
+
+                if (host.endsWith("." + new URL(url).host)) {
+                    // Prevent some subdomain abuse
+                    host = new URL(url).host;
+                }
 
                 if (!(newUrl.startsWith("http://") || newUrl.startsWith("https://"))) {
                     return;
@@ -249,6 +253,14 @@ function crawlPage(url) {
                 if (pagesToCrawl.includes(newUrl)) {
                     return;
                 }
+
+                additionsPerHost[host] ||= 0;
+
+                if (additionsPerHost[host] > MAX_CRAWL_ADDITIONS_PER_HOST) {
+                    return;
+                }
+
+                additionsPerHost[host]++;
 
                 console.log(`Discovered page: ${newUrl}`);
 
