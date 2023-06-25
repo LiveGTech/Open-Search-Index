@@ -11,6 +11,7 @@ const fs = require("fs");
 const path = require("path");
 const mkdirp = require("mkdirp");
 const jsdom = require("jsdom");
+const rssParser = new (require("rss-parser"))();
 
 const validLangs = require("./validlangs");
 
@@ -33,8 +34,9 @@ const INDEX_FIELDS = ["url", "title", "description", "language", "firstIndexed",
 const CRAWLED_LIST_FIELDS = ["url", "firstIndexed", "lastUpdated", "timesCrawled"];
 
 var pagesToCrawl = fs.readFileSync("data/tocrawl.txt", "utf-8").split("\n").filter((line) => line != "");
+var rssFeeds = fs.readFileSync("data/rssfeeds.txt", "utf-8").split("\n").filter((line) => line != "");
 var pagesCrawled = {};
-var crawlStats = {added: 0, crawled: 0, skipped: 0};
+var crawlStats = {added: 0, addedFromRss: 0, crawled: 0, skipped: 0};
 var indexes = {};
 
 function normaliseWord(word) {
@@ -293,6 +295,41 @@ function crawlPage(url) {
     });
 }
 
+function pause() {
+    return new Promise(function(resolve, reject) {
+        console.log("Pausing...");
+
+        setTimeout(function() {
+            console.log("Pause complete");
+
+            resolve();
+        }, CRAWL_PAUSE_DURATION);
+    });
+}
+
+function discoverRssFeeds() {
+    var url = rssFeeds[Math.floor(Math.random() * rssFeeds.length)];
+
+    console.log(`Discovering pages from RSS feed: ${url}`);
+
+    return rssParser.parseURL(url).then(function(feed) {
+        feed.items.forEach(function(item) {
+            if (pagesToCrawl.includes(item.link)) {
+                return;
+            }
+
+            console.log(`Discovered page from RSS feed: ${item.link}`);
+    
+            crawlStats.added++;
+            crawlStats.addedFromRss++;
+
+            pagesToCrawl.splice(Math.floor((pagesToCrawl.length + 1) * Math.random()), 0, item.link);
+        });
+
+        return pause();
+    });
+}
+
 function getNextToCrawl() {
     console.log("Crawl stats:", crawlStats);
 
@@ -310,15 +347,9 @@ function getNextToCrawl() {
     saveCrawlLists();
 
     return crawlPage(pageToCrawl).then(function() {
-        return new Promise(function(resolve, reject) {
-            console.log("Pausing...");
-
-            setTimeout(function() {
-                console.log("Pause complete");
-
-                resolve();
-            }, CRAWL_PAUSE_DURATION);
-        });
+        return pause();
+    }).then(function() {
+        return discoverRssFeeds();
     }).then(function() {
         return getNextToCrawl();
     });
