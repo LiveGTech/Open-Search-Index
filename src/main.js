@@ -9,6 +9,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const minimist = require("minimist");
 const mkdirp = require("mkdirp");
 const jsdom = require("jsdom");
 const rssParser = new (require("rss-parser"))();
@@ -33,6 +34,8 @@ const RE_MATCH_ALL_WORDS = /[\w']+/g;
 const INDEX_FIELDS = ["url", "title", "description", "language", "firstIndexed", "lastUpdated", "referenceScore", "keywordScore"];
 const CRAWLED_LIST_FIELDS = ["url", "firstIndexed", "lastUpdated", "timesCrawled"];
 
+var argv = minimist(process.argv.slice(2));
+
 var pagesToCrawl = fs.readFileSync("data/tocrawl.txt", "utf-8").split("\n").filter((line) => line != "");
 var rssFeeds = fs.readFileSync("data/rssfeeds.txt", "utf-8").split("\n").filter((line) => line != "");
 var pagesCrawled = {};
@@ -54,6 +57,14 @@ function findCommonWords(text) {
     });
     
     return words;
+}
+
+function castObjectValues(object, keys, type) {
+    keys.forEach(function(key) {
+        object[key] = type(object[key]);
+    });
+
+    return object;
 }
 
 function tsvToObjects(data) {
@@ -265,15 +276,17 @@ function crawlPage(url) {
 
                 additionsPerHost[host] ||= 0;
 
-                if (additionsPerHost[host] <= MAX_CRAWL_ADDITIONS_PER_HOST) {
-                    additionsPerHost[host]++;
-
-                    console.log(`Discovered page: ${newUrl}`);
-    
-                    crawlStats.added++;
-    
-                    pagesToCrawl.splice(Math.floor((pagesToCrawl.length + 1) * Math.random()), 0, newUrl);
+                if (additionsPerHost[host] > MAX_CRAWL_ADDITIONS_PER_HOST) {
+                    return;
                 }
+
+                additionsPerHost[host]++;
+
+                console.log(`Discovered page: ${newUrl}`);
+
+                crawlStats.added++;
+
+                pagesToCrawl.splice(Math.floor((pagesToCrawl.length + 1) * Math.random()), 0, newUrl);
 
                 saveCrawlLists();
             });
@@ -355,12 +368,58 @@ function getNextToCrawl() {
     });
 }
 
+function performSearchQuery(query, keywordWeighting = 0.5, referenceWeighting = 0.5, intersectionWeighting = 0.5) {
+    var keywords = query.split(" ");
+    var intersectionEntries = [];
+
+    keywords.forEach(function(keyword) {
+        loadIndex(keyword);
+
+        indexes[keyword].forEach(function(entry) {
+            var existingEntry = intersectionEntries.find((intersectionEntry) => intersectionEntry.url == entry.url);
+
+            if (existingEntry) {
+                existingEntry.keywordScore *= entry.keywordScore;
+                existingEntry.intersectionScore = Math.min(existingEntry.intersectionScore + (1 / 10), 1);
+            } else {
+                castObjectValues(entry, ["firstIndexed", "lastUpdated", "referenceScore", "keywordScore"], Number);
+
+                entry.intersectionScore = 0.1;
+
+                intersectionEntries.push(entry);
+            }
+        });
+    });
+
+    intersectionEntries.forEach(function(entry) {
+        entry.weightedScore = (
+            (entry.keywordScore * keywordWeighting),
+            (entry.referenceScore * referenceWeighting),
+            (entry.intersectionScore * intersectionWeighting)
+        );
+    });
+
+    return intersectionEntries.sort((a, b) => b.weightedScore - a.weightedScore); // Sort by weighted score, descending order
+}
+
 if (fs.existsSync("data/crawled.tsv")) {
     pagesCrawled = arrayToObject(tsvToObjects(fs.readFileSync("data/crawled.tsv", "utf-8")), "url");
 
     console.log("Loaded crawled pages list");
 }
 
-getNextToCrawl().then(function() {
-    console.log("Final indexes:", indexes);
-});
+if (argv["search"]) {
+    console.log("Search results:");
+    console.log("");
+
+    performSearchQuery(String(argv["search"])).forEach(function(result) {
+        console.log(`${result.title} (${result.referenceScore}/${result.keywordScore}/${result.intersectionScore} = ${result.weightedScore})`);
+        console.log(result.url);
+        console.log(result.description);
+        console.log("");
+    });
+} else {
+    getNextToCrawl().then(function() {
+        console.log("Final indexes:", indexes);
+    });
+}
