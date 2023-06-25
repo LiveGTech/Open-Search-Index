@@ -179,7 +179,13 @@ function crawlPage(url) {
         controller.abort();
     }, CRAWL_TIMEOUT_DURATION);
 
-    return fetch(url, {signal}).then(function(response) {
+    var urlToFetch = url;
+
+    if (new URL(urlToFetch).host == "www.reddit.com") {
+        urlToFetch = `https://old.reddit.com${new URL(urlToFetch).pathname}`;
+    }
+
+    return fetch(urlToFetch, {signal}).then(function(response) {
         if (response.status != 200) {
             console.log(`Non-200 skip: ${url}`);
 
@@ -368,8 +374,8 @@ function getNextToCrawl() {
     });
 }
 
-function performSearchQuery(query, keywordWeighting = 0.5, referenceWeighting = 0.5, intersectionWeighting = 0.5) {
-    var keywords = query.split(" ");
+function performSearchQuery(query, keywordWeighting = 0.5, referenceWeighting = 0.5, intersectionWeighting = 0.5, titleWeighting = 0.5) {
+    var keywords = query.split(" ").map((keyword) => keyword.toLocaleLowerCase());
     var intersectionEntries = [];
 
     keywords.forEach(function(keyword) {
@@ -378,13 +384,17 @@ function performSearchQuery(query, keywordWeighting = 0.5, referenceWeighting = 
         indexes[keyword].forEach(function(entry) {
             var existingEntry = intersectionEntries.find((intersectionEntry) => intersectionEntry.url == entry.url);
 
-            if (existingEntry) {
-                existingEntry.keywordScore *= entry.keywordScore;
-                existingEntry.intersectionScore = Math.min(existingEntry.intersectionScore + (1 / 10), 1);
-            } else {
-                castObjectValues(entry, ["firstIndexed", "lastUpdated", "referenceScore", "keywordScore"], Number);
+            castObjectValues(entry, ["firstIndexed", "lastUpdated", "referenceScore", "keywordScore"], Number);
 
+            if (existingEntry) {
+                castObjectValues(existingEntry, ["firstIndexed", "lastUpdated", "referenceScore", "keywordScore"], Number);
+
+                existingEntry.keywordScore += entry.keywordScore;
+                existingEntry.intersectionScore = Math.min(existingEntry.intersectionScore + (1 / 10), 1);
+                existingEntry.interesctionTotal++;
+            } else {
                 entry.intersectionScore = 0.1;
+                entry.interesctionTotal = 1;
 
                 intersectionEntries.push(entry);
             }
@@ -392,10 +402,27 @@ function performSearchQuery(query, keywordWeighting = 0.5, referenceWeighting = 
     });
 
     intersectionEntries.forEach(function(entry) {
+        var queryKeywordsMatch = 0;
+        var queryKeywordsNoMatch = 0;
+
+        entry.title.split(" ").forEach(function(titleKeyword) {
+            titleKeyword = titleKeyword.toLocaleLowerCase();
+
+            if (keywords.includes(titleKeyword)) {
+                queryKeywordsMatch++;
+            } else {
+                queryKeywordsNoMatch++;
+            }
+        });
+
+        entry.titleScore = ((queryKeywordsMatch / keywords.length) + (1 - (queryKeywordsNoMatch / entry.title.split(" ").length))) / 2;
+        entry.keywordScore /= entry.interesctionTotal;
+
         entry.weightedScore = (
-            (entry.keywordScore * keywordWeighting),
-            (entry.referenceScore * referenceWeighting),
-            (entry.intersectionScore * intersectionWeighting)
+            (entry.keywordScore * keywordWeighting) +
+            (entry.referenceScore * referenceWeighting) +
+            (entry.intersectionScore * intersectionWeighting) +
+            (entry.titleScore * titleWeighting)
         );
     });
 
@@ -412,8 +439,12 @@ if (argv["search"]) {
     console.log("Search results:");
     console.log("");
 
-    performSearchQuery(String(argv["search"])).forEach(function(result) {
-        console.log(`${result.title} (${result.referenceScore}/${result.keywordScore}/${result.intersectionScore} = ${result.weightedScore})`);
+    performSearchQuery(String(argv["search"])).forEach(function(result, i) {
+        if (i >= 10) {
+            return;
+        }
+
+        console.log(`${result.title} (${result.referenceScore}/${result.keywordScore}/${result.intersectionScore}/${result.titleScore} = ${result.weightedScore})`);
         console.log(result.url);
         console.log(result.description);
         console.log("");
