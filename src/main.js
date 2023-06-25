@@ -55,6 +55,10 @@ function findCommonWords(text) {
 }
 
 function tsvToObjects(data) {
+    if (data.trim() == "") {
+        return [];
+    }
+
     var entries = data.split("\n").filter((entry) => entry != "");
     var fields = entries.shift().split("\t");
 
@@ -150,6 +154,9 @@ function crawlPage(url) {
     pagesCrawled[url].firstIndexed ||= Date.now();
     pagesCrawled[url].lastUpdated = Date.now();
 
+    pagesCrawled[url].timesCrawled ||= 0;
+    pagesCrawled[url].timesCrawled++;
+
     saveCrawlLists();
 
     var controller = new AbortController();
@@ -224,7 +231,7 @@ function crawlPage(url) {
 
                 if (currentEntry = indexes[word].find((currentEntry) => currentEntry.url == entry.url)) {
                     entry.firstIndexed = currentEntry.firstIndexed;
-                    entry.referenceScore = Math.min(currentEntry.referenceScore + (1 / 100), 1);
+                    entry.referenceScore = Math.min(Number(currentEntry.referenceScore) + (1 / 100), 1);
 
                     Object.assign(currentEntry, entry);
                 } else {
@@ -238,7 +245,7 @@ function crawlPage(url) {
 
             [...dom.querySelectorAll("a[href]")].forEach(function(element, i) {
                 var reference = element.getAttribute("href");
-                var newUrl = new URL(reference, url).href.split("#")[0];
+                var newUrl = new URL(reference, url).href.split("#")[0].replace(/\/$/, "");
                 var host = new URL(reference, url).host;
 
                 if (host.endsWith("." + new URL(url).host)) {
@@ -256,22 +263,20 @@ function crawlPage(url) {
 
                 additionsPerHost[host] ||= 0;
 
-                if (additionsPerHost[host] > MAX_CRAWL_ADDITIONS_PER_HOST) {
-                    return;
+                if (additionsPerHost[host] <= MAX_CRAWL_ADDITIONS_PER_HOST) {
+                    additionsPerHost[host]++;
+
+                    console.log(`Discovered page: ${newUrl}`);
+    
+                    crawlStats.added++;
+    
+                    pagesToCrawl.push(newUrl); // TODO: This should ideally be added at a random location in the list
                 }
-
-                additionsPerHost[host]++;
-
-                console.log(`Discovered page: ${newUrl}`);
-
-                crawlStats.added++;
-
-                pagesToCrawl.push(newUrl); // TODO: This should ideally be added at a random location in the list
 
                 saveCrawlLists();
             });
 
-            fs.appendFileSync("data/corpus.txt", pageText + "\x04");
+            fs.appendFileSync("data/corpus.txt", pageText.replace(/\s+/g, " ") + "\x04");
 
             console.log(`Crawl complete: ${url}`);
 
