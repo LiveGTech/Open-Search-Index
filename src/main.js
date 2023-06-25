@@ -30,7 +30,7 @@ const PAGE_RECRAWL_WAIT_DURATION = 7 * 24 * 60 * 60 * 1_000; // 1 week
 const RE_MATCH_ALL_WORDS = /[\w']+/g;
 
 const INDEX_FIELDS = ["url", "title", "description", "language", "firstIndexed", "lastUpdated", "referenceScore", "keywordScore"];
-const CRAWLED_LIST_FIELDS = ["url", "firstIndexed", "lastUpdated"];
+const CRAWLED_LIST_FIELDS = ["url", "firstIndexed", "lastUpdated", "timesCrawled"];
 
 var pagesToCrawl = fs.readFileSync("data/tocrawl.txt", "utf-8").split("\n").filter((line) => line != "");
 var pagesCrawled = {};
@@ -270,7 +270,7 @@ function crawlPage(url) {
     
                     crawlStats.added++;
     
-                    pagesToCrawl.push(newUrl); // TODO: This should ideally be added at a random location in the list
+                    pagesToCrawl.splice(Math.floor((pagesToCrawl.length + 1) * Math.random()), 0, newUrl);
                 }
 
                 saveCrawlLists();
