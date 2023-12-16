@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# LiveG Open Search Index
+# 
+# Copyright (C) LiveG. All Rights Reserved.
+# 
+# https://search.liveg.tech
+# Licensed by the LiveG Open-Source Licence, which can be found at LICENCE.md.
+
+echo "Creating QLC file..."
+qlc --from-folder data/indexes -o data/indexes.qlc
+
+echo "Creating required directories on remote..."
+ssh $1 "mkdir -p $2/data"
+
+echo "Uploading QLC file to remote..."
+scp -r data/indexes.qlc $1:$2/data/indexes.qlc

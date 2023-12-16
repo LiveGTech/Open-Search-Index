@@ -1,4 +1,5 @@
-node_modules/
-data/indexes/
+node_modules
+data/indexes
+data/indexes.qlc
 data/corpus.txt
 data/crawled.tsv
