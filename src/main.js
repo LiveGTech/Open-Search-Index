@@ -346,6 +346,10 @@ function discoverRssFeeds() {
         });
 
         return pause();
+    }).catch(function(error) {
+        console.warn(`RSS feed fetching error: ${url}`, error);
+
+        return Promise.resolve();
     });
 }
 
@@ -405,11 +409,19 @@ function performSearchQuery(query, keywordWeighting = 0.5, referenceWeighting = 
         var queryKeywordsMatch = 0;
         var queryKeywordsNoMatch = 0;
 
+        var keywordsLeft = [...keywords];
+
         entry.title.split(" ").forEach(function(titleKeyword) {
             titleKeyword = titleKeyword.toLocaleLowerCase();
 
-            if (keywords.includes(titleKeyword)) {
+            if (keywordsLeft.includes(titleKeyword)) {
                 queryKeywordsMatch++;
+
+                var keywordIndex = keywordsLeft.indexOf(titleKeyword);
+
+                if (keywordIndex >= 0) {
+                    keywordsLeft.splice(keywordIndex, 1);
+                }
             } else {
                 queryKeywordsNoMatch++;
             }
