@@ -391,10 +391,10 @@ function performSearchQuery(query, keywordWeighting = 0.5, referenceWeighting = 
 
                 existingEntry.keywordScore += entry.keywordScore;
                 existingEntry.intersectionScore = Math.min(existingEntry.intersectionScore + (1 / 10), 1);
-                existingEntry.interesctionTotal++;
+                existingEntry.intersectionTotal++;
             } else {
                 entry.intersectionScore = 0.1;
-                entry.interesctionTotal = 1;
+                entry.intersectionTotal = 1;
 
                 intersectionEntries.push(entry);
             }
@@ -416,7 +416,7 @@ function performSearchQuery(query, keywordWeighting = 0.5, referenceWeighting = 
         });
 
         entry.titleScore = ((queryKeywordsMatch / keywords.length) + (1 - (queryKeywordsNoMatch / entry.title.split(" ").length))) / 2;
-        entry.keywordScore /= entry.interesctionTotal;
+        entry.keywordScore /= entry.intersectionTotal;
 
         entry.weightedScore = (
             (entry.keywordScore * keywordWeighting) +
