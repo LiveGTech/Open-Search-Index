@@ -36,6 +36,7 @@ const CRAWLED_LIST_FIELDS = ["url", "firstIndexed", "lastUpdated", "timesCrawled
 
 var argv = minimist(process.argv.slice(2));
 
+var allowDomains = fs.readFileSync("data/allowdomains.txt", "utf-8").split("\n").filter((line) => line != "");
 var pagesToCrawl = fs.readFileSync("data/tocrawl.txt", "utf-8").split("\n").filter((line) => line != "");
 var rssFeeds = fs.readFileSync("data/rssfeeds.txt", "utf-8").split("\n").filter((line) => line != "");
 var pagesCrawled = {};
@@ -157,7 +158,7 @@ function crawlPage(url) {
 
             crawlStats.skipped++;
 
-            return Promise.resolve();
+            return Promise.resolve(false);
         }
     }
 
@@ -191,7 +192,7 @@ function crawlPage(url) {
 
             crawlStats.skipped++;
 
-            return Promise.resolve();
+            return Promise.resolve(false);
         }
 
         return response.text().then(function(data) {
@@ -215,7 +216,7 @@ function crawlPage(url) {
 
                 crawlStats.skipped++;
 
-                return Promise.resolve();
+                return Promise.resolve(false);
             }
 
             var titleWords = [...pageTitle.matchAll(RE_MATCH_ALL_WORDS)].map((match) => normaliseWord(match[0]));
@@ -286,6 +287,10 @@ function crawlPage(url) {
                     return;
                 }
 
+                if (allowDomains.length > 0 && !allowDomains.includes(new URL(newUrl).host)) {
+                    return;
+                }
+
                 additionsPerHost[host]++;
 
                 console.log(`Discovered page: ${newUrl}`);
@@ -303,14 +308,14 @@ function crawlPage(url) {
 
             crawlStats.crawled++;
 
-            return Promise.resolve();
+            return Promise.resolve(true);
         });
     }).catch(function(error) {
         console.warn(`Crawl error: ${url}`, error);
 
         crawlStats.skipped++;
 
-        return Promise.resolve();
+        return Promise.resolve(false);
     });
 }
 
@@ -327,6 +332,12 @@ function pause() {
 }
 
 function discoverRssFeeds() {
+    if (rssFeeds.length == 0) {
+        console.log("No RSS feeds to discover pages from");
+
+        return Promise.resolve();
+    }
+ 
     var url = rssFeeds[Math.floor(Math.random() * rssFeeds.length)];
 
     console.log(`Discovering pages from RSS feed: ${url}`);
@@ -369,8 +380,8 @@ function getNextToCrawl() {
 
     saveCrawlLists();
 
-    return crawlPage(pageToCrawl).then(function() {
-        return pause();
+    return crawlPage(pageToCrawl).then(function(success) {
+        return success ? pause() : Promise.resolve();
     }).then(function() {
         return discoverRssFeeds();
     }).then(function() {
